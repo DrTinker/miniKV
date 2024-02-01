@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"miniKV/db"
+	"miniKV/storage"
 )
 
 func main() {
@@ -33,18 +33,18 @@ func main() {
 	}
 }
 
-func mergeHandler(d *db.DB) {
+func mergeHandler(d *storage.DB) {
 	err := d.Merge()
 	if err != nil {
 		fmt.Printf("merge err: %+v\n", err)
 	}
 }
 
-func openHandler() *db.DB {
+func openHandler() *storage.DB {
 	name := ""
 	fmt.Printf("请输入数据库名称\n")
 	fmt.Scanf("%s\n", &name)
-	d, err := db.OpenDB(name)
+	d, err := storage.OpenDB(name)
 	if err != nil {
 		fmt.Printf("连接数据库出错: %+v\n", err)
 		return nil
@@ -53,7 +53,7 @@ func openHandler() *db.DB {
 	return d
 }
 
-func putHandler(d *db.DB) {
+func putHandler(d *storage.DB) {
 	k, v := "", ""
 	fmt.Scanf("%s %s\n", &k, &v)
 	if k == "" || v == "" {
@@ -70,7 +70,7 @@ func putHandler(d *db.DB) {
 
 }
 
-func delHandler(d *db.DB) {
+func delHandler(d *storage.DB) {
 	k := ""
 	fmt.Scanf("%s\n", &k)
 	if k == "" {
@@ -87,7 +87,7 @@ func delHandler(d *db.DB) {
 
 }
 
-func getHandler(d *db.DB) {
+func getHandler(d *storage.DB) {
 	k := ""
 	fmt.Scanf("%s\n", &k)
 	if k == "" {
