@@ -1,10 +1,9 @@
-package db
+package storage
 
 import (
 	"errors"
 	"io"
-	"miniKV/config"
-	"miniKV/entry"
+	"miniKV/conf"
 	"os"
 	"path/filepath"
 	"sync"
@@ -25,7 +24,7 @@ func initDB(name string) (*DB, error) {
 	// 创建内存map
 	cache := NewCacheMap()
 
-	dir := filepath.Join(config.DiskDefaultPath, name)
+	dir := filepath.Join(conf.DiskDefaultPath, name)
 	// 如果数据库目录不存在，则新建一个
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
@@ -70,7 +69,7 @@ func (d *DB) Put(key, value string) error {
 	defer d.lock.Unlock()
 	// 包装entry
 	keyData, valData := []byte(key), []byte(value)
-	e := entry.NewEntry(keyData, valData, config.PUT)
+	e := NewEntry(keyData, valData, conf.PUT)
 	// 记录插入前的offset
 	offset := d.DiskFile.GetOffset()
 	// 先更新磁盘
@@ -95,7 +94,7 @@ func (d *DB) Del(key string) error {
 	defer d.lock.Unlock()
 
 	// 在磁盘写入del entry
-	e := entry.NewEntry([]byte(key), nil, config.DEL)
+	e := NewEntry([]byte(key), nil, conf.DEL)
 	err := d.DiskFile.Write(e)
 	if err != nil {
 		return err
@@ -133,7 +132,7 @@ func (d *DB) Get(key string) (string, bool, error) {
 }
 
 func (d *DB) Merge() error {
-	vaildEntries := []*entry.Entry{}
+	vaildEntries := []*Entry{}
 	offset := int64(0)
 
 	// 加锁
@@ -194,7 +193,7 @@ func (d *DB) Merge() error {
 	}
 	// 临时文件变更为新的数据文件
 	mFile.Close()
-	err = os.Rename(tmpFileName, d.DirPath+string(os.PathSeparator)+config.DataFileName)
+	err = os.Rename(tmpFileName, d.DirPath+string(os.PathSeparator)+conf.DataFileName)
 	if err != nil {
 		return err
 	}

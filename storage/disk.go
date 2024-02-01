@@ -1,9 +1,8 @@
-package db
+package storage
 
 import (
 	"errors"
-	"miniKV/config"
-	"miniKV/entry"
+	"miniKV/conf"
 	"os"
 	"path/filepath"
 	"sync"
@@ -34,7 +33,7 @@ func newStruct(dir string) (*DiskFile, error) {
 	// 创建buffer pool
 	bufPool := &sync.Pool{
 		New: func() interface{} {
-			return make([]byte, config.EntryHeaderSize)
+			return make([]byte, conf.EntryHeaderSize)
 		},
 	}
 
@@ -46,12 +45,12 @@ func newStruct(dir string) (*DiskFile, error) {
 }
 
 func NewDiskFile(path string) (*DiskFile, error) {
-	dir := filepath.Join(path, config.DataFileName)
+	dir := filepath.Join(path, conf.DataFileName)
 	return newStruct(dir)
 }
 
 func NewMergeDiskFile(path string) (*DiskFile, error) {
-	dir := filepath.Join(path, config.MergeTmpFileName)
+	dir := filepath.Join(path, conf.MergeTmpFileName)
 	return newStruct(dir)
 }
 
@@ -72,7 +71,7 @@ func (d *DiskFile) Close() error {
 }
 
 // 根据offset读取
-func (d *DiskFile) Read(offset int64) (*entry.Entry, error) {
+func (d *DiskFile) Read(offset int64) (*Entry, error) {
 	// 从pool中取出buffer备用
 	buffer := d.headerBufferPool.Get().([]byte)
 	// defer放回pool中
@@ -80,11 +79,11 @@ func (d *DiskFile) Read(offset int64) (*entry.Entry, error) {
 
 	// 先读取header
 	n, err := d.file.ReadAt(buffer, offset)
-	if err != nil || n != int(config.EntryHeaderSize) {
+	if err != nil || n != int(conf.EntryHeaderSize) {
 		return nil, err
 	}
 	// 解码header
-	entry, err := entry.Decode(buffer)
+	entry, err := Decode(buffer)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +117,7 @@ func (d *DiskFile) Read(offset int64) (*entry.Entry, error) {
 }
 
 // 写入
-func (d *DiskFile) Write(entry *entry.Entry) error {
+func (d *DiskFile) Write(entry *Entry) error {
 	// 编码
 	data, err := entry.Encode()
 	if err != nil {

@@ -1,4 +1,4 @@
-package db
+package storage
 
 type CacheMap struct {
 	// key - offset

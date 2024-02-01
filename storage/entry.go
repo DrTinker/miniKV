@@ -1,8 +1,8 @@
-package entry
+package storage
 
 import (
 	"encoding/binary"
-	"miniKV/config"
+	"miniKV/conf"
 )
 
 // Entry 写入文件的记录
@@ -25,12 +25,12 @@ func NewEntry(key, value []byte, mark uint16) *Entry {
 }
 
 func (e *Entry) GetSize() int64 {
-	return int64(config.EntryHeaderSize + e.KeySize + e.ValueSize)
+	return int64(conf.EntryHeaderSize + e.KeySize + e.ValueSize)
 }
 
 // Encode 编码 Entry，返回字节数组
 func (e *Entry) Encode() ([]byte, error) {
-	entryHeaderSize := config.EntryHeaderSize
+	entryHeaderSize := conf.EntryHeaderSize
 	buf := make([]byte, e.GetSize())
 	binary.BigEndian.PutUint32(buf[0:4], e.KeySize)
 	binary.BigEndian.PutUint32(buf[4:8], e.ValueSize)
