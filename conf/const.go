@@ -36,3 +36,23 @@ const (
 )
 
 const DefaultConnTimeout = 10 * time.Second
+
+// raft
+// 实现随机时间间隔选举
+const (
+	ElectionTimeoutMin time.Duration = 250 * time.Millisecond
+	ElectionTimeoutMax time.Duration = 400 * time.Millisecond
+
+	// 心跳发送间隔一定要小于超时时间
+	ReplicateInterval time.Duration = 70 * time.Millisecond
+)
+
+// 日志不匹配时快速回退
+const (
+	InvalidIndex int = 0
+	InvalidTerm  int = 0
+)
+
+// raftstate 和 snapshot的存储地址
+const RaftStateAddr = "./raft_persistence/state.info"
+const RaftSnapshotAddr = "./raft_persistence/snapshot.info"

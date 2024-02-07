@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"miniKV/conf"
 	"miniKV/interface/tcp"
-	"miniKV/models"
 	"net"
 	"os"
 	"os/signal"
@@ -122,7 +121,7 @@ func (t *TcpServer) Close() error {
 	err := t.listener.Close()
 	// 关闭全部链接
 	t.activeConn.Range(func(key, value any) bool {
-		cli := value.(*models.TcpClient)
+		cli := value.(*TcpClient)
 		// 等待默认时间关闭
 		cli.Wait.WaitWithTimeout(conf.DefaultConnTimeout)
 		cli.Conn.Close()

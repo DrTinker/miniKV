@@ -1,5 +1,6 @@
 package storage
 
+// TODO 实现LRU内存淘汰机制
 type CacheMap struct {
 	// key - offset
 	keyMap map[string]int64
