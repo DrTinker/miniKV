@@ -94,8 +94,6 @@ func (rf *RaftNode) InstallSnapshot(args *models.InstallSnapshotArgs, reply *mod
 	rf.log.installSnapshot(args.LastIncludedIndex, args.LastIncludedTerm, args.Snapshot)
 	// 持久化算法层数据
 	rf.persistLocked()
-	// 设置标志，避免应用snapshot和应用日志冲突
-	rf.snapPending = true
 	// 唤醒applyCh进行消息写入，通知应用层
-	rf.applyCond.Signal()
+	rf.snapshotCond.Signal()
 }

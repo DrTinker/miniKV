@@ -82,6 +82,7 @@ func (d *DB) Put(key, value string) error {
 	return nil
 }
 
+// TODO 返回删除的value
 func (d *DB) Del(key string) error {
 	// 判断是否存在
 	ok := d.CacheMap.Exist(key)

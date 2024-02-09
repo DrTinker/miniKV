@@ -49,13 +49,14 @@ type RaftNode struct {
 	matchIndex []int
 
 	// apply相关
-	commitIndex int                  // 当前节点最后一条提交的log index
-	lastApplied int                  // 最后一条应用到状态机的log index
-	applyCond   *sync.Cond           // 提交后唤醒apply loop持久化日志
-	applyCh     chan models.ApplyMsg // 向应用层传递提交日志的channel
+	commitIndex int // 当前节点最后一条提交的log index
+	lastApplied int // 最后一条应用到状态机的log index
 
-	// 复用applyCh的标志
-	snapPending bool
+	// 和应用层交互的channel
+	applyCond    *sync.Cond              // 提交后唤醒apply loop持久化日志
+	applyCh      chan models.ApplyMsg    // 向应用层传递提交日志的channel
+	snapshotCond *sync.Cond              // 提交后唤醒apply loop持久化日志
+	snapshotCh   chan models.SnapshotMsg // 向应用层传递提交日志的channel
 }
 
 func (rf *RaftNode) GetState() (int, bool) {
@@ -157,7 +158,7 @@ func (rf *RaftNode) becomeLeaderLocked() {
 }
 
 // 应用层通过start方法来追加log(执行command)
-func (rf *RaftNode) Start(command string) (int, int, bool) {
+func (rf *RaftNode) Start(command []byte) (int, int, bool) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	// 检查是否为leader
@@ -179,8 +180,15 @@ func (rf *RaftNode) Start(command string) (int, int, bool) {
 	return rf.log.size() - 1, rf.currentTerm, true
 }
 
+func (rf *RaftNode) GetRaftStateSize() int {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	return rf.persister.raftStateSize
+}
+
 // 创算法层节点
-func InitRaftNode(peers []rs.RaftServiceClient, me int, applyCh chan models.ApplyMsg) *RaftNode {
+func InitRaftNode(peers []rs.RaftServiceClient, me int,
+	applyCh chan models.ApplyMsg, snapshotCh chan models.SnapshotMsg) *RaftNode {
 	rf := &RaftNode{}
 	rf.peers = peers
 	rf.persister = &persister{}
@@ -192,12 +200,14 @@ func InitRaftNode(peers []rs.RaftServiceClient, me int, applyCh chan models.Appl
 	rf.matchIndex = make([]int, len(rf.peers))
 	rf.nextIndex = make([]int, len(rf.peers))
 
-	rf.applyCh = applyCh
 	rf.commitIndex = 0
 	rf.lastApplied = 0
+
+	rf.applyCh = applyCh
 	rf.applyCond = sync.NewCond(&rf.mu)
 
-	rf.snapPending = false
+	rf.snapshotCh = snapshotCh
+	rf.snapshotCond = sync.NewCond(&rf.mu)
 
 	// 这里用来从磁盘读取持久化的状态，来恢复raft节点
 	rf.readPersist(rf.persister.ReadRaftState())
@@ -205,6 +215,7 @@ func InitRaftNode(peers []rs.RaftServiceClient, me int, applyCh chan models.Appl
 	// start ticker goroutine to start elections
 	go rf.electionTicker()
 	go rf.applicationTicker()
+	go rf.snapshotTicker()
 
 	return rf
 }

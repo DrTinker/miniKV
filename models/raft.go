@@ -4,10 +4,11 @@ import rs "miniKV/grpc_gen/raftService"
 
 type ApplyMsg struct {
 	CommandValid bool
-	Command      interface{}
+	Command      []byte
 	CommandIndex int
+}
 
-	// For PartD:
+type SnapshotMsg struct {
 	SnapshotValid bool
 	Snapshot      []byte
 	SnapshotTerm  int
@@ -17,7 +18,7 @@ type ApplyMsg struct {
 type LogEntry struct {
 	Term         int
 	CommandValid bool
-	Command      string
+	Command      []byte
 }
 
 func (l *LogEntry) ToRPC() *rs.LogEntry {

@@ -10,7 +10,8 @@ import (
 
 // raft持久化工具类
 type persister struct {
-	mu sync.Mutex
+	mu            sync.Mutex
+	raftStateSize int
 }
 
 func MakePersister() *persister {
@@ -40,6 +41,8 @@ func (ps *persister) Save(raftstate []byte, snapshot []byte) {
 	if err != nil {
 		logrus.Errorf("[Raft] Save err: %v", err)
 	}
+	// 记录state大小
+	ps.raftStateSize = len(raftstate)
 }
 
 func (ps *persister) ReadSnapshot() []byte {

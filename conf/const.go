@@ -53,6 +53,22 @@ const (
 	InvalidTerm  int = 0
 )
 
+// 应用层
 // raftstate 和 snapshot的存储地址
 const RaftStateAddr = "./raft_persistence/state.info"
 const RaftSnapshotAddr = "./raft_persistence/snapshot.info"
+const ServiceSnapshotAddr = "./service_persistence/snapshot.info"
+
+const StateMachineName = "raft"
+
+// 操作类型
+type OpType uint8
+
+const (
+	OpGet OpType = iota
+	OpSet
+	OpDel
+)
+
+// 操作超时时间
+const ClientRequestTimeout = 500 * time.Millisecond
