@@ -1,6 +1,8 @@
 package conf
 
-import "time"
+import (
+	"time"
+)
 
 // entry头大小 = keySize(uint32) + valueSize(uint32) + type(uint16)
 const EntryHeaderSize = uint32(10)
@@ -55,9 +57,10 @@ const (
 
 // 应用层
 // raftstate 和 snapshot的存储地址
-const RaftStateAddr = "./raft_persistence/state.info"
-const RaftSnapshotAddr = "./raft_persistence/snapshot.info"
-const ServiceSnapshotAddr = "./service_persistence/snapshot.info"
+const RaftPersistPath = "raft_persistence"
+const ServicePersistPath = "service_persistence"
+const RaftStateFileName = "state.info"
+const RaftSnapFileName = "snapshot.info"
 
 const StateMachineName = "raft"
 

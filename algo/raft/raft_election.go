@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"miniKV/conf"
+	rs "miniKV/grpc_gen/raftService"
 	"miniKV/helper"
 	"miniKV/models"
 	"time"
@@ -26,7 +27,7 @@ func (rf *RaftNode) isElectionTimeoutLocked() bool {
 // 判断谁的日志更新
 func (rf *RaftNode) isMoreUpToDateLocked(candidateIndex, candidateTerm int) bool {
 	lastIdx, lastTerm := rf.log.last()
-	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "Compare last log, Me: [%d]T%d, Candidate: [%d]T%d"),
+	logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "Compare last log, Me: [%d]T%d, Candidate: [%d]T%d"),
 		lastIdx, lastTerm, candidateIndex, candidateTerm)
 	// 比较term，term大的新
 	if candidateTerm != lastTerm {
@@ -42,7 +43,7 @@ func (rf *RaftNode) RequestVote(args *models.RequestVoteArgs, reply *models.Requ
 	// align the term
 	reply.Term = rf.currentTerm
 	if rf.currentTerm > args.Term {
-		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, Reject vote, higher term, T%d>T%d"),
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, Reject vote, higher term, T%d>T%d"),
 			args.CandidateId, rf.currentTerm, args.Term)
 		reply.VoteGranted = false
 		return
@@ -54,7 +55,7 @@ func (rf *RaftNode) RequestVote(args *models.RequestVoteArgs, reply *models.Requ
 	// 检查日志是否更新
 	if rf.isMoreUpToDateLocked(args.LastLogIndex, args.LastLogTerm) {
 		// 如果本地的更新的话则拒绝投票
-		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, Reject Vote, S%d's log less up-to-date"),
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, Reject Vote, S%d's log less up-to-date"),
 			args.CandidateId)
 		reply.VoteGranted = false
 		return
@@ -62,7 +63,7 @@ func (rf *RaftNode) RequestVote(args *models.RequestVoteArgs, reply *models.Requ
 
 	// 检查是否投过票
 	if rf.votedFor != -1 {
-		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, Reject, Already voted S%d"),
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, Reject, Already voted S%d"),
 			args.CandidateId, rf.votedFor)
 		reply.VoteGranted = false
 		return
@@ -74,11 +75,12 @@ func (rf *RaftNode) RequestVote(args *models.RequestVoteArgs, reply *models.Requ
 	rf.persistLocked()
 	// 投票成功才能重置timer
 	rf.resetElectionTimerLocked()
-	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d"), args.CandidateId)
+	logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d"), args.CandidateId)
 }
 
 func (rf *RaftNode) sendRequestVote(server int, args *models.RequestVoteArgs, reply *models.RequestVoteReply) bool {
-	resp, err := rf.peers[server].RequestVote(context.Background(), args.ToRPC())
+	client := rs.NewRaftServiceClient(rf.peers[server])
+	resp, err := client.RequestVote(context.Background(), args.ToRPC())
 	if err != nil {
 		logrus.Errorf(helper.RaftPrefix(rf.me, rf.currentTerm, "Ask vote from %v, Lost or error"), server)
 		return false
@@ -109,7 +111,7 @@ func (rf *RaftNode) startElection(term int) bool {
 
 		// check the context
 		if rf.contextLostLocked(Candidate, term) {
-			logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "Lost context, abort RequestVoteReply in T%d"), rf.currentTerm)
+			logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "Lost context, abort RequestVoteReply in T%d"), rf.currentTerm)
 			return
 		}
 

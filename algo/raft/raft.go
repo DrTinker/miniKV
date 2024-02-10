@@ -2,7 +2,6 @@ package raft
 
 import (
 	"miniKV/conf"
-	rs "miniKV/grpc_gen/raftService"
 	"miniKV/helper"
 	"miniKV/models"
 	"sort"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 // TODO 实现raft算法
@@ -25,11 +25,11 @@ const (
 )
 
 type RaftNode struct {
-	mu        sync.Mutex             // 整个节点的锁
-	peers     []rs.RaftServiceClient // 集群其他节点的RPC地址
-	persister *persister             // Object to hold this peer's persisted state
-	me        int                    // this peer's index into peers[]
-	dead      int32                  // set by Kill()
+	mu        sync.Mutex         // 整个节点的锁
+	peers     []*grpc.ClientConn // 集群其他节点的RPC地址
+	persister *persister         // Object to hold this peer's persisted state
+	me        int                // this peer's index into peers[]
+	dead      int32              // set by Kill()
 
 	// 节点当前角色
 	role Role
@@ -93,7 +93,7 @@ func (rf *RaftNode) getMajorityIndexLocked() int {
 	copy(tmp, rf.matchIndex)
 	sort.Ints(sort.IntSlice(tmp))
 	majorityIdx := (len(tmp) - 1) / 2
-	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "Match index after sort: %v, majority[%d]=%d"),
+	logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "Match index after sort: %v, majority[%d]=%d"),
 		tmp, majorityIdx, tmp[majorityIdx])
 	return tmp[majorityIdx] // min -> max
 }
@@ -105,9 +105,14 @@ func (rf *RaftNode) becomeFollowerLocked(term int) {
 			"Can't become Follower, lower term"))
 		return
 	}
-
-	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "%s -> Follower, For T%d->T%d"),
-		rf.role, rf.currentTerm, term)
+	// leader -> follower
+	if rf.role == Leader {
+		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "%s -> Follower, For T%d->T%d"),
+			rf.role, rf.currentTerm, term)
+	} else {
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "%s -> Follower, For T%d->T%d"),
+			rf.role, rf.currentTerm, term)
+	}
 
 	// important! Could only reset the `votedFor` when term increased
 	shouldPersist := term != rf.currentTerm
@@ -128,7 +133,7 @@ func (rf *RaftNode) becomeCandidateLocked() {
 		return
 	}
 
-	logrus.Errorf(helper.RaftPrefix(rf.me, rf.currentTerm, "%s -> Candidate, For T%d->T%d"),
+	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "%s -> Candidate, For T%d->T%d"),
 		rf.role, rf.currentTerm, rf.currentTerm+1)
 	rf.role = Candidate
 	rf.currentTerm++
@@ -144,7 +149,7 @@ func (rf *RaftNode) becomeLeaderLocked() {
 		return
 	}
 
-	logrus.Errorf(helper.RaftPrefix(rf.me, rf.currentTerm, "%s -> Leader, For T%d"),
+	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "%s -> Leader, For T%d"),
 		rf.role, rf.currentTerm)
 	rf.role = Leader
 
@@ -174,7 +179,7 @@ func (rf *RaftNode) Start(command []byte) (int, int, bool) {
 	})
 	// 日志变更，触发持久化
 	rf.persistLocked()
-	logrus.Errorf(helper.RaftPrefix(rf.me, rf.currentTerm, "Leader accept log [%d]T%d"),
+	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "Leader accept log [%d]T%d"),
 		rf.log.size()-1, rf.currentTerm)
 
 	return rf.log.size() - 1, rf.currentTerm, true
@@ -187,7 +192,7 @@ func (rf *RaftNode) GetRaftStateSize() int {
 }
 
 // 创算法层节点
-func InitRaftNode(peers []rs.RaftServiceClient, me int,
+func InitRaftNode(peers []*grpc.ClientConn, me int, readyCh chan struct{},
 	applyCh chan models.ApplyMsg, snapshotCh chan models.SnapshotMsg) *RaftNode {
 	rf := &RaftNode{}
 	rf.peers = peers
@@ -213,7 +218,10 @@ func InitRaftNode(peers []rs.RaftServiceClient, me int,
 	rf.readPersist(rf.persister.ReadRaftState())
 
 	// start ticker goroutine to start elections
-	go rf.electionTicker()
+	go func() {
+		<-readyCh
+		rf.electionTicker()
+	}()
 	go rf.applicationTicker()
 	go rf.snapshotTicker()
 

@@ -19,6 +19,7 @@ func NewRaftHandler(node *raft.RaftNode) *RaftHandler {
 }
 
 func (r *RaftHandler) RequestVote(ctx context.Context, req *rs.RequestVoteReq) (resp *rs.RequestVoteResp, err error) {
+	resp = &rs.RequestVoteResp{}
 	args := &models.RequestVoteArgs{}
 	args.FromRPC(req)
 
@@ -31,6 +32,7 @@ func (r *RaftHandler) RequestVote(ctx context.Context, req *rs.RequestVoteReq) (
 }
 
 func (r *RaftHandler) AppendEntries(ctx context.Context, req *rs.AppendEntriesReq) (resp *rs.AppendEntriesResp, err error) {
+	resp = &rs.AppendEntriesResp{}
 	args := &models.AppendEntriesArgs{}
 	args.FromRPC(req)
 
@@ -43,6 +45,7 @@ func (r *RaftHandler) AppendEntries(ctx context.Context, req *rs.AppendEntriesRe
 }
 
 func (r *RaftHandler) InstallSnapshot(ctx context.Context, req *rs.InstallSnapshotReq) (resp *rs.InstallSnapshotResp, err error) {
+	resp = &rs.InstallSnapshotResp{}
 	args := &models.InstallSnapshotArgs{}
 	args.FromRPC(req)
 

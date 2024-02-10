@@ -21,7 +21,7 @@ func MakePersister() *persister {
 func (ps *persister) ReadRaftState() []byte {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-	data, err := helper.ReadFile(conf.RaftStateAddr)
+	data, err := helper.ReadFile(conf.RaftPersistPath, conf.RaftStateFileName)
 	if err != nil {
 		logrus.Errorf("[Raft] ReadRaftState err: %v", err)
 		return nil
@@ -33,11 +33,11 @@ func (ps *persister) ReadRaftState() []byte {
 func (ps *persister) Save(raftstate []byte, snapshot []byte) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-	err := helper.WriteFile(conf.RaftStateAddr, raftstate)
+	err := helper.WriteFile(conf.RaftPersistPath, conf.RaftStateFileName, raftstate)
 	if err != nil {
 		logrus.Errorf("[Raft] Save err: %v", err)
 	}
-	err = helper.WriteFile(conf.RaftSnapshotAddr, snapshot)
+	err = helper.WriteFile(conf.RaftPersistPath, conf.RaftSnapFileName, snapshot)
 	if err != nil {
 		logrus.Errorf("[Raft] Save err: %v", err)
 	}
@@ -48,7 +48,7 @@ func (ps *persister) Save(raftstate []byte, snapshot []byte) {
 func (ps *persister) ReadSnapshot() []byte {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-	data, err := helper.ReadFile(conf.RaftStateAddr)
+	data, err := helper.ReadFile(conf.RaftPersistPath, conf.RaftSnapFileName)
 	if err != nil {
 		logrus.Errorf("[Raft] ReadSnapshot err: %v", err)
 		return nil

@@ -2,6 +2,7 @@ package raft
 
 import (
 	"context"
+	rs "miniKV/grpc_gen/raftService"
 	"miniKV/helper"
 	"miniKV/models"
 
@@ -13,10 +14,10 @@ func (rf *RaftNode) Snapshot(index int, snapshot []byte) {
 	// Your code here (PartD).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "Snap on %d"), index)
+	logrus.Warnf(helper.RaftPrefix(rf.me, rf.currentTerm, "Snap on %d"), index)
 	// 不能对已经snapshot过的日志再次操作 也 不能对未提交的日志snapshot
 	if index <= rf.log.snapLastIdx || index > rf.commitIndex {
-		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "Could not snapshot beyond [%d, %d]"), rf.log.snapLastIdx+1, rf.commitIndex)
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "Could not snapshot beyond [%d, %d]"), rf.log.snapLastIdx+1, rf.commitIndex)
 		return
 	}
 
@@ -25,7 +26,8 @@ func (rf *RaftNode) Snapshot(index int, snapshot []byte) {
 }
 
 func (rf *RaftNode) sendInstallSnapshot(server int, args *models.InstallSnapshotArgs, reply *models.InstallSnapshotReply) bool {
-	resp, err := rf.peers[server].InstallSnapshot(context.Background(), args.ToRPC())
+	client := rs.NewRaftServiceClient(rf.peers[server])
+	resp, err := client.InstallSnapshot(context.Background(), args.ToRPC())
 	if err != nil {
 		logrus.Errorf(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, Lost or crashed"), server)
 		return false
@@ -45,7 +47,7 @@ func (rf *RaftNode) installOnPeer(peer, term int, args *models.InstallSnapshotAr
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, InstallSnap, Reply=%v"), peer, reply)
+	logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, InstallSnap, Reply=%v"), peer, reply)
 
 	// align the term
 	if reply.Term > rf.currentTerm {
@@ -69,13 +71,13 @@ func (rf *RaftNode) installOnPeer(peer, term int, args *models.InstallSnapshotAr
 func (rf *RaftNode) InstallSnapshot(args *models.InstallSnapshotArgs, reply *models.InstallSnapshotReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, RecvSnap, Args=%v"),
+	logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, RecvSnap, Args=%v"),
 		args.LeaderId, args)
 
 	reply.Term = rf.currentTerm
 	// align the term
 	if args.Term < rf.currentTerm {
-		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Reject Snap, Higher Term, T%d>T%d"),
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Reject Snap, Higher Term, T%d>T%d"),
 			args.LeaderId, rf.currentTerm, args.Term)
 		return
 	}
@@ -85,7 +87,7 @@ func (rf *RaftNode) InstallSnapshot(args *models.InstallSnapshotArgs, reply *mod
 
 	// check if it is a RPC which is out of order
 	if rf.log.snapLastIdx >= args.LastIncludedIndex {
-		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Reject Snap, Already installed, Last: %d>=%d"),
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Reject Snap, Already installed, Last: %d>=%d"),
 			args.LeaderId, rf.log.snapLastIdx, args.LastIncludedIndex)
 		return
 	}

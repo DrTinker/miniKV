@@ -1,6 +1,8 @@
 package models
 
-import rs "miniKV/grpc_gen/raftService"
+import (
+	rs "miniKV/grpc_gen/raftService"
+)
 
 type ApplyMsg struct {
 	CommandValid bool
@@ -97,9 +99,9 @@ type AppendEntriesArgs struct {
 }
 
 func (a *AppendEntriesArgs) ToRPC() *rs.AppendEntriesReq {
-	Entries := make([]*rs.LogEntry, len(a.Entries))
+	entries := make([]*rs.LogEntry, len(a.Entries))
 	for i, e := range a.Entries {
-		Entries[i] = e.ToRPC()
+		entries[i] = e.ToRPC()
 	}
 	res := &rs.AppendEntriesReq{
 		Term:         int64(a.Term),
@@ -107,7 +109,7 @@ func (a *AppendEntriesArgs) ToRPC() *rs.AppendEntriesReq {
 		PrevLogIndex: int64(a.PrevLogIndex),
 		PrevLogTerm:  int64(a.PrevLogTerm),
 		LeaderCommit: int64(a.LeaderCommit),
-		Entries:      Entries,
+		Entries:      entries,
 	}
 
 	return res
@@ -120,11 +122,12 @@ func (a *AppendEntriesArgs) FromRPC(r *rs.AppendEntriesReq) {
 	a.PrevLogTerm = int(r.PrevLogTerm)
 	a.LeaderCommit = int(r.LeaderCommit)
 
-	Entries := make([]LogEntry, len(r.Entries))
+	entries := make([]LogEntry, len(r.Entries))
 	for i, e := range r.Entries {
-		Entries[i] = LogEntry{}
-		Entries[i].FromRPC(e)
+		entries[i] = LogEntry{}
+		entries[i].FromRPC(e)
 	}
+	a.Entries = entries
 }
 
 type AppendEntriesReply struct {

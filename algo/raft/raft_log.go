@@ -76,7 +76,7 @@ func (rl *RaftLog) encodeLog(e *helper.MyEncoder) {
 
 // 获取全部日志大小(包含snapshot的部分)
 func (rl *RaftLog) size() int {
-	return rl.snapLastIdx + int(len(rl.tailLog))
+	return rl.snapLastIdx + len(rl.tailLog)
 }
 
 // 逻辑下标转换实际下标
@@ -122,6 +122,7 @@ func (rl *RaftLog) firstLogFor(term int) int {
 func (rl *RaftLog) appendFrom(prevIdx int, entries []models.LogEntry) {
 	if prevIdx == -1 {
 		rl.tailLog = append(rl.tailLog, entries...)
+		return
 	}
 	rl.tailLog = append(rl.tailLog[:rl.idx(prevIdx)+1], entries...)
 }

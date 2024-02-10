@@ -285,18 +285,17 @@ func (d *DataHandler) handleSnapshotMsg(msg *models.SnapshotMsg) {
 
 func (d *DataHandler) applyToStateMachine(op *models.Op) models.CallBackMsg {
 	var val string
-	var exist bool
 	var err error
 	switch op.OpType {
 	case conf.OpGet:
-		val, exist, err = d.stateMachine.Get(op.Key)
+		val, err = d.stateMachine.Get(op.Key)
 	case conf.OpSet:
 		err = d.stateMachine.Put(op.Key, op.Value)
 	case conf.OpDel:
-		err = d.stateMachine.Del(op.Key)
+		val, err = d.stateMachine.Del(op.Key)
 	}
 	msg := models.CallBackMsg{}
-	if err != nil && exist {
+	if err != nil && err != conf.KeyNotExistErr {
 		// 一般错误
 		logrus.Errorf("[DataHandler] applyToStateMachine err: %v", err)
 		msg.Err = conf.ServerInternalErr
@@ -307,7 +306,7 @@ func (d *DataHandler) applyToStateMachine(op *models.Op) models.CallBackMsg {
 		msg.Err = err
 		msg.Value = val
 	}
-
+	logrus.Infof("[DataHandler] applyToStateMachine info: %v", msg)
 	return msg
 }
 
@@ -335,7 +334,7 @@ func (d *DataHandler) makeSnapshot(index int) {
 	// 保存
 	enc := helper.NewEncoder(buf)
 	_ = enc.Encode(d.duplicateTable)
-	err := helper.WriteFile(conf.ServiceSnapshotAddr, buf.Bytes())
+	err := helper.WriteFile(conf.ServicePersistPath, conf.RaftSnapFileName, buf.Bytes())
 	if err != nil {
 		logrus.Errorf("[DataHandler] makeSnapshot db err: %+v", err)
 		return
@@ -351,20 +350,22 @@ func (d *DataHandler) makeSnapshot(index int) {
 
 func (d *DataHandler) restoreFromSnapshot(snapshot []byte) {
 	// 恢复幂等表
-	var dupTable map[int]models.LastOpInfo
+	dupTable := make(map[int]models.LastOpInfo)
 	var buf *bytes.Buffer
 	// 为空则从本地磁盘磁盘读取
 	if len(snapshot) == 0 {
-		data, err := helper.ReadFile(conf.ServiceSnapshotAddr)
+		data, err := helper.ReadFile(conf.ServicePersistPath, conf.RaftSnapFileName)
 		if err != nil {
 			panic(fmt.Sprintf("failed to restore state from snapshpt, err: %v", err))
 		}
 		snapshot = data
 	}
-	buf = bytes.NewBuffer(snapshot)
-	dec := helper.NewDecoder(buf)
-	if dec.Decode(&dupTable) != nil {
-		panic("failed to restore state from snapshpt")
+	if len(snapshot) != 0 {
+		buf = bytes.NewBuffer(snapshot)
+		dec := helper.NewDecoder(buf)
+		if dec.Decode(&dupTable) != nil {
+			panic("failed to restore state from snapshpt")
+		}
 	}
 
 	// 恢复db

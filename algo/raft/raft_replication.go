@@ -3,6 +3,7 @@ package raft
 import (
 	"context"
 	"miniKV/conf"
+	rs "miniKV/grpc_gen/raftService"
 	"miniKV/helper"
 	"miniKV/models"
 	"time"
@@ -11,7 +12,8 @@ import (
 )
 
 func (rf *RaftNode) sendAppendEntries(server int, args *models.AppendEntriesArgs, reply *models.AppendEntriesReply) bool {
-	resp, err := rf.peers[server].AppendEntries(context.Background(), args.ToRPC())
+	client := rs.NewRaftServiceClient(rf.peers[server])
+	resp, err := client.AppendEntries(context.Background(), args.ToRPC())
 	if err != nil {
 		logrus.Errorf(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, Lost or crashed"), server)
 		return false
@@ -40,7 +42,7 @@ func (rf *RaftNode) startReplilcation(term int) bool {
 
 		// check context lost
 		if rf.contextLostLocked(Leader, term) {
-			logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, Context Lost, T%d:Leader->T%d:%s"), peer, term, rf.currentTerm, rf.role)
+			logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, Context Lost, T%d:Leader->T%d:%s"), peer, term, rf.currentTerm, rf.role)
 			return
 		}
 
@@ -65,7 +67,7 @@ func (rf *RaftNode) startReplilcation(term int) bool {
 			if rf.nextIndex[peer] > prevNext {
 				rf.nextIndex[peer] = prevNext
 			}
-			logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "Log not matched in %d, Update next=%d"),
+			logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "Log not matched in %d, Update next=%d"),
 				args.PrevLogIndex, rf.nextIndex[peer])
 			return
 		}
@@ -78,7 +80,7 @@ func (rf *RaftNode) startReplilcation(term int) bool {
 		// and log[N].term==currentTerm: set commitIndex=N
 		n := rf.getMajorityIndexLocked()
 		if n > rf.commitIndex && rf.log.at(n).Term == rf.currentTerm {
-			logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "Leader update the commit index %d->%d"),
+			logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "Leader update the commit index %d->%d"),
 				rf.commitIndex, n)
 			rf.commitIndex = n
 			rf.applyCond.Signal()
@@ -88,7 +90,7 @@ func (rf *RaftNode) startReplilcation(term int) bool {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	if rf.contextLostLocked(Leader, term) {
-		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "Leader[T%d] -> %s[T%d]"),
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "Leader[T%d] -> %s[T%d]"),
 			term, rf.role, rf.currentTerm)
 		return false
 	}
@@ -112,7 +114,7 @@ func (rf *RaftNode) startReplilcation(term int) bool {
 				LastIncludedTerm:  rf.log.snapLastTerm,
 				Snapshot:          rf.log.snapshot,
 			}
-			logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, InstallSnap, Args=%v"),
+			logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "-> S%d, InstallSnap, Args=%v"),
 				peer, args)
 			go rf.installOnPeer(peer, term, args)
 			continue
@@ -126,7 +128,6 @@ func (rf *RaftNode) startReplilcation(term int) bool {
 			Entries:      rf.log.tail(prevLogIndex + 1),
 			LeaderCommit: rf.commitIndex,
 		}
-
 		go replicateToPeer(peer, args)
 	}
 
@@ -149,8 +150,15 @@ func (rf *RaftNode) AppendEntries(args *models.AppendEntriesArgs, reply *models.
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Receive log, Prev=[%d]T%d, Len()=%d"),
-		args.LeaderId, args.PrevLogIndex, args.PrevLogTerm, len(args.Entries))
+	// 输出日志同步，忽略心跳
+	if len(args.Entries) != 0 {
+		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Receive log, Prev=[%d]T%d, Len()=%d"),
+			args.LeaderId, args.PrevLogIndex, args.PrevLogTerm, len(args.Entries))
+	} else {
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Receive log, Prev=[%d]T%d, Len()=%d"),
+			args.LeaderId, args.PrevLogIndex, args.PrevLogTerm, len(args.Entries))
+	}
+
 	// replay initialized
 	reply.Term = rf.currentTerm
 	reply.Success = false
@@ -158,7 +166,7 @@ func (rf *RaftNode) AppendEntries(args *models.AppendEntriesArgs, reply *models.
 	// term对齐
 	// Leader的term小于自己，直接拒绝
 	if args.Term < rf.currentTerm {
-		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Reject log"), args.LeaderId)
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Reject log"), args.LeaderId)
 		return
 	}
 
@@ -173,7 +181,7 @@ func (rf *RaftNode) AppendEntries(args *models.AppendEntriesArgs, reply *models.
 	// 接收日志，根据PrevLogIndex判断匹配点
 	// 不匹配，先判断index是否越界(说明本节点日志比leader少)，不少的话再判断term是否相同
 	if args.PrevLogIndex >= rf.log.size() {
-		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Reject Log, Follower log too short, Len:%d <= Prev:%d"),
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Reject Log, Follower log too short, Len:%d <= Prev:%d"),
 			args.LeaderId, rf.log.size(), args.PrevLogIndex)
 		// 日志差的较多，
 		reply.ConfilictIndex = rf.log.size()
@@ -182,7 +190,7 @@ func (rf *RaftNode) AppendEntries(args *models.AppendEntriesArgs, reply *models.
 	}
 	//  同一index的日志term也要相同
 	if args.PrevLogTerm != rf.log.at(args.PrevLogIndex).Term {
-		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Reject Log, Prev log not match, [%d]: T%d != T%d"),
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "<- S%d, Reject Log, Prev log not match, [%d]: T%d != T%d"),
 			args.LeaderId, args.PrevLogIndex, rf.log.at(args.PrevLogIndex).Term, args.PrevLogTerm)
 		// term不匹配时，应通知leader回退一个term的日志
 		reply.ConfilictTerm = rf.log.at(args.PrevLogIndex).Term
@@ -193,14 +201,14 @@ func (rf *RaftNode) AppendEntries(args *models.AppendEntriesArgs, reply *models.
 	// 日志覆盖，体现了raft的strong leader特点，与主节点不一致的日志全背覆盖
 	rf.log.appendFrom(args.PrevLogIndex, args.Entries)
 	reply.Success = true
-	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "Follower append logs: (%d, %d]"),
+	logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "Follower append logs: (%d, %d]"),
 		args.PrevLogIndex, args.PrevLogIndex+len(args.Entries))
 	// log变化，需要持久化
 	rf.persistLocked()
 	// 日志应用
 	if args.LeaderCommit > rf.commitIndex {
 		// commitIndex变为LeaderCommit和args中日志条目最高索引 二者中的较小值
-		logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "Follower update the commit index %d->%d"),
+		logrus.Debugf(helper.RaftPrefix(rf.me, rf.currentTerm, "Follower update the commit index %d->%d"),
 			rf.commitIndex, args.LeaderCommit)
 		rf.commitIndex = args.LeaderCommit
 		// 这里args中的日志已经被复制到rf.log中了，所以只要比较 args中日志条目最高索引 = len(rf.log)

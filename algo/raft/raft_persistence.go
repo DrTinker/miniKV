@@ -58,5 +58,5 @@ func (rf *RaftNode) readPersist(data []byte) {
 	// 读取snapshot
 	rf.log.snapshot = rf.persister.ReadSnapshot()
 
-	logrus.Errorf(helper.RaftPrefix(rf.me, rf.currentTerm, "Read Persist %v"), rf.role)
+	logrus.Infof(helper.RaftPrefix(rf.me, rf.currentTerm, "Read Persist %v"), rf.role)
 }

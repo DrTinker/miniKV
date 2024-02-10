@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"miniKV/conf"
 	"miniKV/storage"
 )
 
@@ -77,7 +78,7 @@ func delHandler(d *storage.DB) {
 		fmt.Printf("key不能为空")
 		return
 	}
-	err := d.Del(k)
+	_, err := d.Del(k)
 	if err != nil {
 		fmt.Printf("删除出错: %+v\n", err)
 		return
@@ -94,12 +95,12 @@ func getHandler(d *storage.DB) {
 		fmt.Printf("key不能为空")
 		return
 	}
-	val, ok, err := d.Get(k)
+	val, err := d.Get(k)
 	if err != nil {
 		fmt.Printf("查询出错: %+v\n", err)
 		return
 	}
-	if !ok {
+	if err == conf.KeyNotExistErr {
 		fmt.Printf("key: %s不存在\n", k)
 		return
 	}

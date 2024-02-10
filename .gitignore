@@ -1,2 +1,5 @@
 .vscode/
 data/
+raft_persistence/
+service_persistence/
+general/
