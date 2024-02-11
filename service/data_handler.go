@@ -28,7 +28,7 @@ type DataHandler struct {
 	// 算法层回调的通知channel
 	callbackChs map[int]chan models.CallBackMsg
 	// 确保请求幂等性
-	duplicateTable map[int]models.LastOpInfo
+	duplicateTable map[string]models.LastOpInfo
 	// 记录已经应用到状态机的最后一条index
 	lastApplied int
 	// 状态机
@@ -45,7 +45,7 @@ func NewDataHandler(me, maxraftstate int, node *raft.RaftNode, applyCh chan mode
 	d.snapshotCh = snapshotCh
 	d.callbackChs = make(map[int]chan models.CallBackMsg)
 	d.lastApplied = 0
-	d.duplicateTable = make(map[int]models.LastOpInfo)
+	d.duplicateTable = make(map[string]models.LastOpInfo)
 
 	d.restoreFromSnapshot(nil)
 
@@ -101,9 +101,16 @@ func (d *DataHandler) Get(ctx context.Context, req *ds.GetReq) (resp *ds.GetResp
 	return resp, err
 }
 
+func (d *DataHandler) GetState(ctx context.Context, req *ds.GetStateReq) (resp *ds.GetStateResp, err error) {
+	resp = &ds.GetStateResp{}
+	_, isLeader := d.node.GetState()
+	resp.IsLeader = isLeader
+	return
+}
+
 func (d *DataHandler) Set(ctx context.Context, req *ds.SetReq) (resp *ds.SetResp, err error) {
 	resp = &ds.SetResp{}
-	clientId, seqId := int(req.Info.ClientId), int(req.Info.SeqId)
+	clientId, seqId := req.Info.ClientId, req.Info.SeqId
 	// 判断幂等性
 	d.mu.Lock()
 	if d.checkIdempotent(clientId, seqId) {
@@ -165,7 +172,7 @@ func (d *DataHandler) Set(ctx context.Context, req *ds.SetReq) (resp *ds.SetResp
 
 func (d *DataHandler) Del(ctx context.Context, req *ds.DelReq) (resp *ds.DelResp, err error) {
 	resp = &ds.DelResp{}
-	clientId, seqId := int(req.Info.ClientId), int(req.Info.SeqId)
+	clientId, seqId := req.Info.ClientId, req.Info.SeqId
 	// 判断幂等性
 	d.mu.Lock()
 	if d.checkIdempotent(clientId, seqId) {
@@ -324,7 +331,7 @@ func (d *DataHandler) removeCallbackCh(index int) {
 }
 
 // 检查请求幂等性
-func (d *DataHandler) checkIdempotent(clientId, seqId int) bool {
+func (d *DataHandler) checkIdempotent(clientId, seqId string) bool {
 	res, ok := d.duplicateTable[clientId]
 	return ok && seqId <= res.SeqId
 }
@@ -350,7 +357,7 @@ func (d *DataHandler) makeSnapshot(index int) {
 
 func (d *DataHandler) restoreFromSnapshot(snapshot []byte) {
 	// 恢复幂等表
-	dupTable := make(map[int]models.LastOpInfo)
+	dupTable := make(map[string]models.LastOpInfo)
 	var buf *bytes.Buffer
 	// 为空则从本地磁盘磁盘读取
 	if len(snapshot) == 0 {

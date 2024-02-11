@@ -73,5 +73,11 @@ const (
 	OpDel
 )
 
+var OpTable = map[string]OpType{
+	"SET": OpSet,
+	"GET": OpGet,
+	"DEL": OpDel,
+}
+
 // 操作超时时间
 const ClientRequestTimeout = 500 * time.Millisecond

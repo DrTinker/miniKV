@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"miniKV/conf"
+	"miniKV/helper"
 	"miniKV/interface/tcp"
 	"net"
 	"os"
@@ -43,6 +44,10 @@ func NewTcpServer(ip string, port int, handler tcp.Handler) *TcpServer {
 	}
 
 	return server
+}
+
+func (t *TcpServer) SetHandler(handler tcp.Handler) {
+	t.handler = handler
 }
 
 func (t *TcpServer) StartServer() {
@@ -85,6 +90,7 @@ func (t *TcpServer) listenAndServe() {
 			logrus.Warnf("tcp server shut down err: %v", err)
 			time.Sleep(1 * time.Second)
 		}
+		logrus.Info("tcp server shut down success")
 	}()
 
 	// 在异常退出后释放资源
@@ -103,6 +109,10 @@ func (t *TcpServer) listenAndServe() {
 		}
 		// 新来的链接
 		logrus.Infof("new tcp link from: %v", conn.RemoteAddr())
+		t.activeConn.Store(conn.RemoteAddr(), &TcpClient{
+			Conn: conn,
+			Wait: helper.Wait{},
+		})
 		wg.Add(1)
 		// 开启新的 goroutine 处理该连接
 		go func() {
@@ -119,6 +129,7 @@ func (t *TcpServer) Close() error {
 	t.state.Store(conf.CLOSE)
 	// 关闭listener
 	err := t.listener.Close()
+	t.handler.Close()
 	// 关闭全部链接
 	t.activeConn.Range(func(key, value any) bool {
 		cli := value.(*TcpClient)

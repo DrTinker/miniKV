@@ -13,19 +13,16 @@ type CallBackMsg struct {
 
 // 幂等性判断
 type LastOpInfo struct {
-	SeqId int
+	SeqId string
 	Reply CallBackMsg
 }
 
 type Op struct {
-	// Your definitions here.
-	// Field names must start with capital letters,
-	// otherwise RPC will break.
 	Key      string
 	Value    string
 	OpType   conf.OpType
-	ClientId int
-	SeqId    int
+	ClientId string
+	SeqId    string
 }
 
 func (o *Op) Encode() ([]byte, error) {

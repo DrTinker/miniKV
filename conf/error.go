@@ -11,3 +11,5 @@ var ServerInternalErr = errors.New("ServerInternalErr")
 var KeyNotExistErr = errors.New("KeyNotExistErr")
 var WrongLeaderErr = errors.New("WrongLeaderErr")
 var TimeoutErr = errors.New("TimeoutErr")
+
+var CmdInvaildErr = errors.New("CmdInvaildErr")
