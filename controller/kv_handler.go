@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"miniKV/conf"
 	ds "miniKV/grpc_gen/dataService"
@@ -9,30 +10,14 @@ import (
 	"miniKV/parser"
 	"net"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 )
 
 // 实现handler接口，注入tcp server
-type KVHandler struct {
-	client ds.DataServiceClient
-	resCh  chan string
-	errCh  chan error
-	dead   int32
-}
-
-func NewKVHandler(conn *grpc.ClientConn, errCh chan error) KVHandler {
-	return KVHandler{
-		client: ds.NewDataServiceClient(conn),
-		resCh:  make(chan string),
-		errCh:  errCh,
-	}
-}
-
-func (kv *KVHandler) Handle(ctx context.Context, conn net.Conn) {
+func (kv *KVController) Handle(ctx context.Context, conn net.Conn) {
 	parser := parser.NewMyParser(conn)
 	cmdCh := parser.GetCmdChan()
 	// defer parser.CloseCmdChan()
@@ -59,6 +44,15 @@ func (kv *KVHandler) Handle(ctx context.Context, conn net.Conn) {
 			case res := <-kv.resCh:
 				// 写回结果
 				conn.Write([]byte(res))
+			case err := <-kv.errCh:
+				logrus.Info("leader changed")
+				// 如果leader发生变更，则获取新leader重试本次cmd
+				if err == conf.WrongLeaderErr {
+					before := kv.leaderId
+					kv.getLeader()
+					fmt.Printf("before: %d, after: %d\n", before, kv.leaderId)
+				}
+				conn.Write([]byte("server busy, please retry"))
 			case <-time.After(conf.ClientRequestTimeout):
 				conn.Write([]byte("request time out"))
 			}
@@ -70,16 +64,7 @@ func (kv *KVHandler) Handle(ctx context.Context, conn net.Conn) {
 	}
 }
 
-func (kv *KVHandler) Close() {
-	atomic.StoreInt32(&kv.dead, 1)
-}
-
-func (kv *KVHandler) isClosed() bool {
-	z := atomic.LoadInt32(&kv.dead)
-	return z == 1
-}
-
-func (kv *KVHandler) invoke(cmd []string) {
+func (kv *KVController) invoke(cmd []string) {
 	// 心跳处理
 	if len(cmd) == 1 && cmd[0] == conf.HeartBeatArg {
 		kv.resCh <- conf.HeartBeatReply
@@ -100,22 +85,19 @@ func (kv *KVHandler) invoke(cmd []string) {
 	clientId := helper.GenClientId()
 	seqId := helper.GenSeqId()
 	// rpc调用
+	client := ds.NewDataServiceClient(kv.clusterConn[kv.leaderId])
 	switch op {
 	case conf.OpSet:
 		if len(cmd) != 3 {
 			kv.resCh <- conf.CmdInvaildErr.Error()
 			return
 		}
-		_, err := kv.client.Set(context.Background(),
+		_, err := client.Set(context.Background(),
 			&ds.SetReq{Key: cmd[1], Value: cmd[2],
 				Info: &ds.ReqInfo{ClientId: clientId, SeqId: seqId}})
-		// leader变更则想外层通知
-		if err == conf.WrongLeaderErr {
-			kv.errCh <- err
-		}
-		// 其他错误直接返回
+		// 错误处理
 		if err != nil {
-			kv.resCh <- err.Error()
+			kv.errHandler(err)
 			return
 		}
 		kv.resCh <- "success"
@@ -124,14 +106,10 @@ func (kv *KVHandler) invoke(cmd []string) {
 			kv.resCh <- conf.CmdInvaildErr.Error()
 			return
 		}
-		resp, err := kv.client.Get(context.Background(),
+		resp, err := client.Get(context.Background(),
 			&ds.GetReq{Key: cmd[1]})
-		if err == conf.WrongLeaderErr {
-			kv.errCh <- err
-			return
-		}
 		if err != nil {
-			kv.resCh <- err.Error()
+			kv.errHandler(err)
 			return
 		}
 		kv.resCh <- resp.Value
@@ -140,16 +118,33 @@ func (kv *KVHandler) invoke(cmd []string) {
 			kv.resCh <- conf.CmdInvaildErr.Error()
 			return
 		}
-		resp, err := kv.client.Del(context.Background(),
+		resp, err := client.Del(context.Background(),
 			&ds.DelReq{Key: cmd[1], Info: &ds.ReqInfo{ClientId: clientId, SeqId: seqId}})
-		if err == conf.WrongLeaderErr {
-			kv.errCh <- err
-			return
-		}
 		if err != nil {
-			kv.resCh <- err.Error()
+			kv.errHandler(err)
 			return
 		}
 		kv.resCh <- resp.Value
+	}
+}
+
+// TODO 增加zhuang增加状态码
+// grpc 返回的err和原来的err不同
+func (kv *KVController) errHandler(err error) {
+	fromError, ok := status.FromError(err)
+	if !ok {
+		logrus.Warnf("[KVController] rpc return a strange err: %v", err)
+	}
+	switch {
+	case fromError.Message() == conf.WrongLeaderErr.Error():
+		kv.errCh <- conf.WrongLeaderErr
+	case fromError.Message() == conf.KeyNotExistErr.Error():
+		kv.resCh <- "key not exist"
+	case fromError.Message() == conf.CmdInvaildErr.Error():
+		kv.resCh <- "invaild cmd"
+	case fromError.Message() == conf.ServerInternalErr.Error():
+		kv.resCh <- "server error"
+	case fromError.Message() == conf.TimeoutErr.Error():
+		logrus.Debug(err)
 	}
 }

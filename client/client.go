@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/peterh/liner"
 	"github.com/sirupsen/logrus"
@@ -74,6 +73,14 @@ func (kv *KVClient) Run() {
 		if cmd, err := kv.tool.Prompt(fmt.Sprintf("%s> ", kv.remoteAddr)); err == nil {
 			// 记录历史值
 			kv.tool.AppendHistory(cmd)
+			// 特殊命令
+			if cmd == "conn" {
+				kv.Connect()
+				continue
+			}
+			if cmd == "exit" {
+				return
+			}
 
 			// 发送cmd
 			cmd += conf.CLRF
@@ -104,13 +111,16 @@ func (kv *KVClient) isClosed() bool {
 	return z == int32(conf.CLOSE)
 }
 
-func (kv *KVClient) keepAlive() {
-	for !kv.isClosed() {
-		_, err := kv.conn.Write([]byte(conf.HeartBeatArg))
-		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
-			// handle timeout
-			kv.Connect()
-		}
-		time.Sleep(conf.ClientRequestTimeout)
-	}
-}
+// func (kv *KVClient) keepAlive() {
+// 	for !kv.isClosed() {
+// 		_, err := kv.conn.Write([]byte(conf.HeartBeatArg + conf.CLRF))
+// 		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+// 			// handle timeout
+// 			kv.Connect()
+// 		}
+// 		// 及时取出pong
+// 		buf := make([]byte, 10)
+// 		kv.conn.Read(buf)
+// 		time.Sleep(conf.ClientHeartBeat)
+// 	}
+// }

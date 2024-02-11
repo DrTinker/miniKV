@@ -83,6 +83,7 @@ var OpTable = map[string]OpType{
 
 // 操作超时时间
 const ClientRequestTimeout = 500 * time.Millisecond
+const ClientHeartBeat = time.Second
 
 // client关键字
 var History_fn = filepath.Join(os.TempDir(), ".liner_example_history")
