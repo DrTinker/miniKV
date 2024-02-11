@@ -2,7 +2,6 @@ package network
 
 import (
 	"context"
-	"fmt"
 	"miniKV/conf"
 	"miniKV/helper"
 	"miniKV/interface/tcp"
@@ -20,9 +19,7 @@ import (
 // 实现一个tcp服务器
 type TcpServer struct {
 	// ip
-	ip string
-	// 开放端口
-	port int
+	addr string
 	// listener
 	listener net.Listener
 	// 关闭channel，监听关闭时间
@@ -35,11 +32,10 @@ type TcpServer struct {
 	handler tcp.Handler
 }
 
-func NewTcpServer(ip string, port int, handler tcp.Handler) *TcpServer {
+func NewTcpServer(addr string, handler tcp.Handler) *TcpServer {
 	// 初始化map
 	server := &TcpServer{
-		ip:      ip,
-		port:    port,
+		addr:    addr,
 		handler: handler,
 	}
 
@@ -51,7 +47,7 @@ func (t *TcpServer) SetHandler(handler tcp.Handler) {
 }
 
 func (t *TcpServer) StartServer() {
-	address := fmt.Sprintf("%s:%d", t.ip, t.port)
+	address := t.addr
 	// 初始化链接
 	l, err := net.Listen("tcp", address)
 	if err != nil {

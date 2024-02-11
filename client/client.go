@@ -51,6 +51,9 @@ func (kv *KVClient) Connect() {
 }
 
 func (kv *KVClient) Close() {
+	if kv.conn == nil {
+		return
+	}
 	// 关闭conn
 	kv.conn.Close()
 	// 保存命令行历史记录
