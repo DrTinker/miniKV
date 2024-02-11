@@ -1,6 +1,8 @@
 package conf
 
 import (
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -81,3 +83,12 @@ var OpTable = map[string]OpType{
 
 // 操作超时时间
 const ClientRequestTimeout = 500 * time.Millisecond
+
+// client关键字
+var History_fn = filepath.Join(os.TempDir(), ".liner_example_history")
+var KeyWords = []string{"set", "get", "del"}
+
+const HeartBeatArg = "ping"
+const HeartBeatReply = "pong"
+
+const CLRF = "\r\n"

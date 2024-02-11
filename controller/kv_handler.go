@@ -35,7 +35,7 @@ func NewKVHandler(conn *grpc.ClientConn, errCh chan error) KVHandler {
 func (kv *KVHandler) Handle(ctx context.Context, conn net.Conn) {
 	parser := parser.NewMyParser(conn)
 	cmdCh := parser.GetCmdChan()
-	defer parser.CloseCmdChan()
+	// defer parser.CloseCmdChan()
 	go parser.ParseStream()
 	// for range 自动判断chan是否关闭
 	for {
@@ -80,6 +80,11 @@ func (kv *KVHandler) isClosed() bool {
 }
 
 func (kv *KVHandler) invoke(cmd []string) {
+	// 心跳处理
+	if len(cmd) == 1 && cmd[0] == conf.HeartBeatArg {
+		kv.resCh <- conf.HeartBeatReply
+		return
+	}
 	// 长度不对
 	if len(cmd) > 3 || len(cmd) < 2 {
 		kv.resCh <- conf.CmdInvaildErr.Error()
@@ -120,9 +125,10 @@ func (kv *KVHandler) invoke(cmd []string) {
 			return
 		}
 		resp, err := kv.client.Get(context.Background(),
-			&ds.GetReq{Key: cmd[0]})
+			&ds.GetReq{Key: cmd[1]})
 		if err == conf.WrongLeaderErr {
 			kv.errCh <- err
+			return
 		}
 		if err != nil {
 			kv.resCh <- err.Error()
@@ -135,9 +141,10 @@ func (kv *KVHandler) invoke(cmd []string) {
 			return
 		}
 		resp, err := kv.client.Del(context.Background(),
-			&ds.DelReq{Key: cmd[0], Info: &ds.ReqInfo{ClientId: clientId, SeqId: seqId}})
+			&ds.DelReq{Key: cmd[1], Info: &ds.ReqInfo{ClientId: clientId, SeqId: seqId}})
 		if err == conf.WrongLeaderErr {
 			kv.errCh <- err
+			return
 		}
 		if err != nil {
 			kv.resCh <- err.Error()
