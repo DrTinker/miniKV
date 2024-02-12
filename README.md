@@ -8,7 +8,7 @@
 
 miniKV是一个分布式的KV存储，基于 raft 协议保证分布式系统数据的一致性和可用性。
 
-![system design](https://github.com/DrTinker/miniKV/pic/system_structure_export.png)
+![system design](https://github.com/DrTinker/miniKV/blob/main/pic/system_structure_export.png)
 
 ## Code
 
