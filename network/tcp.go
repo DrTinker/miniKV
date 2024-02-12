@@ -2,10 +2,9 @@ package network
 
 import (
 	"context"
-	"fmt"
 	"miniKV/conf"
+	"miniKV/helper"
 	"miniKV/interface/tcp"
-	"miniKV/models"
 	"net"
 	"os"
 	"os/signal"
@@ -20,9 +19,7 @@ import (
 // 实现一个tcp服务器
 type TcpServer struct {
 	// ip
-	ip string
-	// 开放端口
-	port int
+	addr string
 	// listener
 	listener net.Listener
 	// 关闭channel，监听关闭时间
@@ -35,19 +32,22 @@ type TcpServer struct {
 	handler tcp.Handler
 }
 
-func NewTcpServer(ip string, port int, handler tcp.Handler) *TcpServer {
+func NewTcpServer(addr string, handler tcp.Handler) *TcpServer {
 	// 初始化map
 	server := &TcpServer{
-		ip:      ip,
-		port:    port,
+		addr:    addr,
 		handler: handler,
 	}
 
 	return server
 }
 
+func (t *TcpServer) SetHandler(handler tcp.Handler) {
+	t.handler = handler
+}
+
 func (t *TcpServer) StartServer() {
-	address := fmt.Sprintf("%s:%d", t.ip, t.port)
+	address := t.addr
 	// 初始化链接
 	l, err := net.Listen("tcp", address)
 	if err != nil {
@@ -86,6 +86,7 @@ func (t *TcpServer) listenAndServe() {
 			logrus.Warnf("tcp server shut down err: %v", err)
 			time.Sleep(1 * time.Second)
 		}
+		logrus.Info("tcp server shut down success")
 	}()
 
 	// 在异常退出后释放资源
@@ -104,6 +105,10 @@ func (t *TcpServer) listenAndServe() {
 		}
 		// 新来的链接
 		logrus.Infof("new tcp link from: %v", conn.RemoteAddr())
+		t.activeConn.Store(conn.RemoteAddr(), &TcpClient{
+			Conn: conn,
+			Wait: helper.Wait{},
+		})
 		wg.Add(1)
 		// 开启新的 goroutine 处理该连接
 		go func() {
@@ -120,9 +125,10 @@ func (t *TcpServer) Close() error {
 	t.state.Store(conf.CLOSE)
 	// 关闭listener
 	err := t.listener.Close()
+	t.handler.Close()
 	// 关闭全部链接
 	t.activeConn.Range(func(key, value any) bool {
-		cli := value.(*models.TcpClient)
+		cli := value.(*TcpClient)
 		// 等待默认时间关闭
 		cli.Wait.WaitWithTimeout(conf.DefaultConnTimeout)
 		cli.Conn.Close()

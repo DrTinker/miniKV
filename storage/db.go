@@ -82,34 +82,48 @@ func (d *DB) Put(key, value string) error {
 	return nil
 }
 
-func (d *DB) Del(key string) error {
+// TODO 返回删除的value
+func (d *DB) Del(key string) (string, error) {
 	// 判断是否存在
 	ok := d.CacheMap.Exist(key)
 	if !ok {
-		return nil
+		return "", conf.KeyNotExistErr
 	}
 
 	// 加锁
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
+	// 先读取原数据
+	offset := d.CacheMap.Get(key)
+	// 根据offset从内存获取entry
+	ori, err := d.DiskFile.Read(offset)
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+
 	// 在磁盘写入del entry
 	e := NewEntry([]byte(key), nil, conf.DEL)
-	err := d.DiskFile.Write(e)
+	err = d.DiskFile.Write(e)
 	if err != nil {
-		return err
+		return "", err
 	}
+
 	// 只在内存删除
 	d.CacheMap.Del(key)
-	return nil
+
+	if ori == nil {
+		return "", nil
+	}
+	return string(ori.Value), nil
 }
 
 // val值，key是否存在，err
-func (d *DB) Get(key string) (string, bool, error) {
+func (d *DB) Get(key string) (string, error) {
 	// 先查询内存
 	ok := d.CacheMap.Exist(key)
 	if !ok {
-		return "", false, nil
+		return "", conf.KeyNotExistErr
 	}
 
 	// 从内存获取offset
@@ -122,13 +136,13 @@ func (d *DB) Get(key string) (string, bool, error) {
 	// 根据offset从内存获取entry
 	e, err := d.DiskFile.Read(offset)
 	if err != nil && err != io.EOF {
-		return "", true, err
+		return "", err
 	}
 	if e != nil {
-		return string(e.Value), true, nil
+		return string(e.Value), nil
 	}
 
-	return "", true, nil
+	return "", nil
 }
 
 func (d *DB) Merge() error {
