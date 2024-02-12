@@ -94,6 +94,7 @@ key not exist
 - [x] 实现基于lsm tree的存储系统
 - [x] 实现网关服务controller
 - [x] 实现简易命令行client
+- [ ] 实现数据分片存储
 - [ ] 支持更多命令和数据类型(目前仅有string)
 - [ ] 实现Redis协议解析器(目前为自定义的简易解析器)
 - [ ] 实现controller服务注册与发现(目前为静态配置节点)
