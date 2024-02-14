@@ -16,9 +16,9 @@ miniKV是一个分布式的KV存储，基于 raft 协议保证分布式系统数
 |-- algo			# raft算法层
 |-- client			# 简易命令行客户端
 |-- conf			# 常量、配置等
-|-- controller		# 网关节点实现
+|-- controller		        # 网关节点实现
 |-- helper			# 各类与业务无关的方法
-|-- interface		# 接口定义
+|-- interface		        # 接口定义
 |-- models			# 各类struct
 |-- network			# tcp服务器实现
 |-- parser			# 协议解析器
